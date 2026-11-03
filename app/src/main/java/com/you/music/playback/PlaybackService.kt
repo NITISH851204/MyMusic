@@ -2,9 +2,12 @@ package com.you.music.playback
 
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.you.music.data.remote.NewPipeDownloader
 
 class PlaybackService : MediaSessionService() {
 
@@ -12,7 +15,13 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+
+        val http = DefaultHttpDataSource.Factory()
+            .setUserAgent(NewPipeDownloader.USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+
         val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(http))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -23,6 +32,7 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+
         session = MediaSession.Builder(this, player).build()
     }
 
