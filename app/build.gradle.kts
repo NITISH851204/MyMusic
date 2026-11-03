@@ -41,7 +41,7 @@ dependencies {
         coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.2")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-session:1.4.1")
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.8")
+        implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
