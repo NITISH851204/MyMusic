@@ -7,49 +7,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.Surface
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
-import com.you.music.data.MusicRepository
-import com.you.music.data.Song
 import com.you.music.playback.PlaybackService
-import kotlinx.coroutines.launch
+import com.you.music.ui.MusicApp
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -83,8 +57,18 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            MaterialTheme {
-                MusicScreen(controllerState.value, lastCrash)
+            val ctx = LocalContext.current
+            val dark = isSystemInDarkTheme()
+            val scheme = when {
+                Build.VERSION.SDK_INT >= 31 ->
+                    if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+                dark -> darkColorScheme()
+                else -> lightColorScheme()
+            }
+            MaterialTheme(colorScheme = scheme) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    MusicApp(controllerState.value, lastCrash)
+                }
             }
         }
     }
@@ -92,132 +76,5 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         super.onDestroy()
-    }
-}
-
-@Composable
-fun MusicScreen(controller: MediaController?, lastCrash: String?) {
-    val scope = rememberCoroutineScope()
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<Song>>(emptyList()) }
-    var status by remember { mutableStateOf("") }
-    var isPlaying by remember { mutableStateOf(false) }
-    var crash by remember { mutableStateOf(lastCrash) }
-
-    DisposableEffect(controller) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                status = "Player error: ${error.errorCodeName}"
-            }
-        }
-        controller?.addListener(listener)
-        isPlaying = controller?.isPlaying ?: false
-        onDispose { controller?.removeListener(listener) }
-    }
-
-    val doSearch: () -> Unit = {
-        if (query.isNotBlank()) {
-            scope.launch {
-                status = "Searching..."
-                try {
-                    results = MusicRepository.search(query)
-                    status = "${results.size} results"
-                } catch (e: Throwable) {
-                    status = "Search error: ${e.javaClass.simpleName}: ${e.message}"
-                }
-            }
-        }
-    }
-
-    val play: (Song) -> Unit = { song ->
-        scope.launch {
-            status = "Loading: ${song.title}"
-            try {
-                val url = MusicRepository.audioUrl(song.url)
-                controller?.let {
-                    it.setMediaItem(
-                        MediaItem.Builder()
-                            .setUri(url)
-                            .setMediaMetadata(
-                                MediaMetadata.Builder()
-                                    .setTitle(song.title)
-                                    .setArtist(song.artist)
-                                    .build()
-                            )
-                            .build()
-                    )
-                    it.prepare()
-                    it.play()
-                }
-                status = "Now: ${song.title}"
-            } catch (e: Throwable) {
-                status = "Error: ${e.javaClass.simpleName}: ${e.message}"
-            }
-        }
-    }
-
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-
-        val c = crash
-        if (c != null) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                Text("Last crash (screenshot bhejo):", style = MaterialTheme.typography.labelMedium)
-                SelectionContainer {
-                    Text(
-                        c.take(2500),
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 260.dp)
-                            .verticalScroll(rememberScrollState()),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                Button(onClick = { crash = null }) { Text("Close") }
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                placeholder = { Text("Search songs") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { doSearch() })
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = doSearch) { Text("Go") }
-        }
-
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(status, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            Button(
-                enabled = controller != null,
-                onClick = {
-                    controller?.let { if (it.isPlaying) it.pause() else it.play() }
-                }
-            ) { Text(if (isPlaying) "Pause" else "Play") }
-        }
-
-        LazyColumn {
-            items(results) { song ->
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { play(song) }
-                        .padding(vertical = 10.dp)
-                ) {
-                    Text(song.title, maxLines = 1, style = MaterialTheme.typography.bodyLarge)
-                    Text(song.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
     }
 }
