@@ -1,5 +1,8 @@
 package com.you.music.data
 
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.ServiceList
@@ -9,7 +12,25 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
-data class Song(val title: String, val artist: String, val url: String)
+data class Song(
+    val title: String,
+    val artist: String,
+    val url: String,
+    val thumb: String? = null
+)
+
+/** Queue me jaane wala item. Asli stream URL playback ke time resolve hota hai. */
+fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
+    .setMediaId(url)
+    .setUri(Uri.parse("yt://resolve?u=" + Uri.encode(url)))
+    .setMediaMetadata(
+        MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setArtworkUri(thumb?.let { Uri.parse(it) })
+            .build()
+    )
+    .build()
 
 object MusicRepository {
 
@@ -23,7 +44,14 @@ object MusicRepository {
         val info = SearchInfo.getInfo(service, handler)
         info.relatedItems
             .filterIsInstance<StreamInfoItem>()
-            .map { Song(it.name, it.uploaderName ?: "Unknown", it.url) }
+            .map {
+                Song(
+                    title = it.name,
+                    artist = it.uploaderName ?: "Unknown",
+                    url = it.url,
+                    thumb = it.thumbnails.firstOrNull()?.url
+                )
+            }
     }
 
     suspend fun audioUrl(videoUrl: String): String = withContext(Dispatchers.IO) {
