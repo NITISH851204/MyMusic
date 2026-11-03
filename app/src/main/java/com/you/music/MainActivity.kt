@@ -13,12 +13,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +50,7 @@ import com.you.music.data.MusicRepository
 import com.you.music.data.Song
 import com.you.music.playback.PlaybackService
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -62,6 +67,13 @@ class MainActivity : ComponentActivity() {
             notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        val crashFile = File(filesDir, "crash.txt")
+        val lastCrash: String? = if (crashFile.exists()) {
+            val text = crashFile.readText()
+            crashFile.delete()
+            text
+        } else null
+
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
         controllerFuture = future
@@ -72,7 +84,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                MusicScreen(controllerState.value)
+                MusicScreen(controllerState.value, lastCrash)
             }
         }
     }
@@ -84,12 +96,13 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MusicScreen(controller: MediaController?) {
+fun MusicScreen(controller: MediaController?, lastCrash: String?) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var isPlaying by remember { mutableStateOf(false) }
+    var crash by remember { mutableStateOf(lastCrash) }
 
     DisposableEffect(controller) {
         val listener = object : Player.Listener {
@@ -112,8 +125,8 @@ fun MusicScreen(controller: MediaController?) {
                 try {
                     results = MusicRepository.search(query)
                     status = "${results.size} results"
-                } catch (e: Exception) {
-                    status = "Search error: ${e.message}"
+                } catch (e: Throwable) {
+                    status = "Search error: ${e.javaClass.simpleName}: ${e.message}"
                 }
             }
         }
@@ -140,13 +153,32 @@ fun MusicScreen(controller: MediaController?) {
                     it.play()
                 }
                 status = "Now: ${song.title}"
-            } catch (e: Exception) {
-                status = "Error: ${e.message}"
+            } catch (e: Throwable) {
+                status = "Error: ${e.javaClass.simpleName}: ${e.message}"
             }
         }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+
+        val c = crash
+        if (c != null) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Text("Last crash (screenshot bhejo):", style = MaterialTheme.typography.labelMedium)
+                SelectionContainer {
+                    Text(
+                        c.take(2500),
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp)
+                            .verticalScroll(rememberScrollState()),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Button(onClick = { crash = null }) { Text("Close") }
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = query,
