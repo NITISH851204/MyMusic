@@ -27,7 +27,12 @@ object Playlists {
         save()
         return id
     }
-
+    fun createWith(name: String, songs: List<Song>): String {
+        val id = System.currentTimeMillis().toString()
+        _all.value = _all.value + Playlist(id, name, songs.distinctBy { it.url })
+        save()
+        return id
+    }
     fun delete(id: String) {
         _all.value = _all.value.filter { it.id != id }
         save()
