@@ -33,16 +33,12 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.FilterChip
-import androidx.compose.runtime.collectAsState
-import com.you.music.data.Downloads
-import com.you.music.ui.theme.ThemeManager
-import com.you.music.ui.theme.ThemeSettings
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -68,9 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import com.you.music.data.Downloads
 import com.you.music.data.MusicRepository
 import com.you.music.data.Song
 import com.you.music.data.toMediaItem
+import com.you.music.ui.theme.ThemeManager
+import com.you.music.ui.theme.ThemeSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -152,26 +152,26 @@ fun MusicApp(
 ) {
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
-    
 
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var showPlayer by remember { mutableStateOf(false) }
     var crash by remember { mutableStateOf(lastCrash) }
-        var showSettings by remember { mutableStateOf(false) }
-            var tab by remember { mutableStateOf(0) }
+    var showSettings by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(0) }
     val downloaded by Downloads.downloads.collectAsState()
     val progressMap by Downloads.progress.collectAsState()
     val dlError by Downloads.error.collectAsState()
     val shown = if (tab == 0) results else downloaded
 
-        BackHandler(enabled = showSettings) { showSettings = false }
+    BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
 
     val doSearch: () -> Unit = {
         if (query.isNotBlank()) {
             focus.clearFocus()
+            tab = 0
             scope.launch {
                 status = "Searching..."
                 try {
@@ -186,7 +186,7 @@ fun MusicApp(
 
     val playAt: (Int) -> Unit = { index ->
         controller?.let { c ->
-                        c.setMediaItems(shown.map { it.toMediaItem() }, index, 0L)
+            c.setMediaItems(shown.map { it.toMediaItem() }, index, 0L)
             c.prepare()
             c.play()
         }
@@ -218,12 +218,12 @@ fun MusicApp(
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
-        val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
+    val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
-                                Row(
+                Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, top = 12.dp, end = 4.dp),
@@ -242,7 +242,10 @@ fun MusicApp(
                 val c = crash
                 if (c != null) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("Last crash (screenshot bhejo):", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "Last crash (screenshot bhejo):",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                         SelectionContainer {
                             Text(
                                 c.take(2500),
@@ -280,7 +283,7 @@ fun MusicApp(
                     )
                 }
 
-                                Row(
+                Row(
                     Modifier.padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -318,6 +321,7 @@ fun MusicApp(
                         )
                     }
                 }
+            }
 
             if (state.hasMedia) {
                 MiniPlayer(
@@ -334,7 +338,7 @@ fun MusicApp(
             enter = slideInVertically { it },
             exit = slideOutVertically { it }
         ) {
-                        PlayerScreen(state, controller, onClose = { showPlayer = false })
+            PlayerScreen(state, controller, onClose = { showPlayer = false })
         }
 
         AnimatedVisibility(
