@@ -1,49 +1,28 @@
 package com.you.music.playback
 
-import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import com.you.music.data.MusicRepository
-import com.you.music.data.remote.NewPipeDownloader
-import kotlinx.coroutines.runBlocking
-import java.io.IOException
+import com.you.music.data.AudioCache
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 class PlaybackService : MediaSessionService() {
 
     private var session: MediaSession? = null
+    private var skipper: SponsorSkipper? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
 
-        val http = DefaultHttpDataSource.Factory()
-            .setUserAgent(NewPipeDownloader.USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-
-        val resolving = ResolvingDataSource.Factory(
-            http,
-            ResolvingDataSource.Resolver { spec ->
-                val videoUrl = spec.uri.getQueryParameter("u")
-                if (spec.uri.scheme == "yt" && videoUrl != null) {
-                    try {
-                        val real = runBlocking { MusicRepository.audioUrl(videoUrl) }
-                        spec.withUri(Uri.parse(real))
-                    } catch (e: Exception) {
-                        throw IOException(e.message ?: "resolve failed", e)
-                    }
-                } else {
-                    spec
-                }
-            }
-        )
-
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(resolving))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(AudioCache.playbackFactory()))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -56,6 +35,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         session = MediaSession.Builder(this, player).build()
+        skipper = SponsorSkipper(applicationContext, player, scope)
     }
 
     override fun onGetSession(
@@ -63,6 +43,8 @@ class PlaybackService : MediaSessionService() {
     ): MediaSession? = session
 
     override fun onDestroy() {
+        skipper?.release()
+        scope.cancel()
         session?.run {
             player.release()
             release()
