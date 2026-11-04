@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -154,6 +157,7 @@ fun MusicApp(
     var addTarget by remember { mutableStateOf<Song?>(null) }
     var createThenAdd by remember { mutableStateOf<Song?>(null) }
     var showCreate by remember { mutableStateOf(false) }
+    var showImport by remember { mutableStateOf(false) }
 
     val downloaded by Downloads.downloads.collectAsState()
     val progressMap by Downloads.progress.collectAsState()
@@ -356,15 +360,21 @@ fun MusicApp(
                         modifier = Modifier.weight(1f)
                     )
                 } else if (tab == 3 && openPlaylist == null) {
-                    PlaylistList(
-                        playlists = playlists,
-                        onOpen = { openPlaylistId = it },
-                        onNew = {
-                            createThenAdd = null
-                            showCreate = true
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Column(Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { showImport = true },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) { Text("Import from YouTube link") }
+                        PlaylistList(
+                            playlists = playlists,
+                            onOpen = { openPlaylistId = it },
+                            onNew = {
+                                createThenAdd = null
+                                showCreate = true
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 } else {
                     if (searchActive && tab == 0) {
                         Row(
@@ -468,83 +478,4 @@ fun MusicApp(
                     state = state,
                     onOpen = { showPlayer = true },
                     onToggle = toggle,
-                    onNext = { controller?.seekToNextMediaItem() }
-                )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = showPlayer,
-            enter = slideInVertically { it },
-            exit = slideOutVertically { it }
-        ) {
-            NowPlayingScreen(state, controller, onClose = { showPlayer = false })
-        }
-
-        AnimatedVisibility(
-            visible = showSettings,
-            enter = slideInVertically { it },
-            exit = slideOutVertically { it }
-        ) {
-            SettingsScreen(settings, themeManager, onClose = { showSettings = false })
-        }
-
-        val target = addTarget
-        if (target != null) {
-            AddToPlaylistDialog(
-                playlists = playlists,
-                onDismiss = { addTarget = null },
-                onPick = { id ->
-                    Playlists.addSong(id, target)
-                    addTarget = null
-                },
-                onNew = {
-                    createThenAdd = target
-                    addTarget = null
-                    showCreate = true
-                }
-            )
-        }
-
-        if (showCreate) {
-            CreatePlaylistDialog(
-                onDismiss = {
-                    showCreate = false
-                    createThenAdd = null
-                },
-                onCreate = { name ->
-                    val id = Playlists.create(name)
-                    createThenAdd?.let { Playlists.addSong(id, it) }
-                    createThenAdd = null
-                    showCreate = false
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun CollectionHeader(
-    name: String,
-    onBack: () -> Unit,
-    onPlayAll: () -> Unit
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-        }
-        Text(
-            name,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.titleLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Button(onClick = onPlayAll) { Text("Play all") }
-    }
-}
+                    onNex
