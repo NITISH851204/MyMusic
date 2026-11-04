@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -47,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -56,6 +58,7 @@ import com.you.music.data.History
 import com.you.music.data.Likes
 import com.you.music.data.MusicRepository
 import com.you.music.data.Playlists
+import com.you.music.data.SearchMode
 import com.you.music.data.Song
 import com.you.music.data.toMediaItem
 import com.you.music.ui.theme.ThemeManager
@@ -139,10 +142,13 @@ fun MusicApp(
     var results by remember { mutableStateOf<List<Song>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(SearchMode.ALL) }
     var showPlayer by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var crash by remember { mutableStateOf(lastCrash) }
     var tab by remember { mutableStateOf(0) }
+
+    var collection by remember { mutableStateOf<Pair<String, List<Song>>?>(null) }
 
     var openPlaylistId by remember { mutableStateOf<String?>(null) }
     var addTarget by remember { mutableStateOf<Song?>(null) }
@@ -157,12 +163,14 @@ fun MusicApp(
     val recent by History.recent.collectAsState()
 
     val openPlaylist = playlists.firstOrNull { it.id == openPlaylistId }
+    val col = if (tab == 0 && !searchActive) collection else null
 
-    val shown = when (tab) {
-        0 -> results
-        1 -> downloaded
-        2 -> liked
-        3 -> openPlaylist?.songs ?: emptyList()
+    val shown = when {
+        col != null -> col.second
+        tab == 0 -> results
+        tab == 1 -> downloaded
+        tab == 2 -> liked
+        tab == 3 -> openPlaylist?.songs ?: emptyList()
         else -> recent
     }
 
@@ -181,9 +189,11 @@ fun MusicApp(
         results = emptyList()
         status = ""
         searchActive = false
+        collection = null
         focus.clearFocus()
     }
 
+    BackHandler(enabled = col != null) { collection = null }
     BackHandler(enabled = tab == 3 && openPlaylist != null) { openPlaylistId = null }
     BackHandler(enabled = searchActive && tab == 0) { clearSearch() }
     BackHandler(enabled = showSettings) { showSettings = false }
@@ -194,10 +204,11 @@ fun MusicApp(
             focus.clearFocus()
             tab = 0
             searchActive = true
+            val m = mode
             scope.launch {
                 status = "Searching..."
                 try {
-                    results = MusicRepository.search(query)
+                    results = MusicRepository.search(query, m)
                     status = if (results.isEmpty()) "Kuch nahi mila" else ""
                 } catch (e: Throwable) {
                     status = "Search error: ${e.javaClass.simpleName}: ${e.message}"
@@ -240,7 +251,7 @@ fun MusicApp(
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
-    val isHome = tab == 0 && !searchActive
+    val isHome = tab == 0 && !searchActive && col == null
     val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
     val currentPlaylistId = if (tab == 3) openPlaylist?.id else null
 
@@ -309,6 +320,7 @@ fun MusicApp(
                         onClick = {
                             tab = 0
                             searchActive = false
+                            collection = null
                         },
                         label = { Text("Home") }
                     )
@@ -340,6 +352,7 @@ fun MusicApp(
                 if (isHome) {
                     HomeScreen(
                         onPlay = { list, index -> playList(list, index) },
+                        onOpenCollection = { title, songs -> collection = title to songs },
                         modifier = Modifier.weight(1f)
                     )
                 } else if (tab == 3 && openPlaylist == null) {
@@ -353,6 +366,38 @@ fun MusicApp(
                         modifier = Modifier.weight(1f)
                     )
                 } else {
+                    if (searchActive && tab == 0) {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                SearchMode.ALL to "All",
+                                SearchMode.SONGS to "Songs",
+                                SearchMode.VIDEOS to "Videos"
+                            ).forEach { (m, label) ->
+                                FilterChip(
+                                    selected = mode == m,
+                                    onClick = {
+                                        mode = m
+                                        doSearch()
+                                    },
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
+
+                    if (col != null) {
+                        CollectionHeader(
+                            name = col.first,
+                            onBack = { collection = null },
+                            onPlayAll = {
+                                if (col.second.isNotEmpty()) playList(col.second, 0)
+                            }
+                        )
+                    }
+
                     if (tab == 3 && openPlaylist != null) {
                         PlaylistHeader(
                             name = openPlaylist.name,
@@ -475,5 +520,31 @@ fun MusicApp(
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun CollectionHeader(
+    name: String,
+    onBack: () -> Unit,
+    onPlayAll: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+        }
+        Text(
+            name,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Button(onClick = onPlayAll) { Text("Play all") }
     }
 }
