@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,7 +38,9 @@ fun TrackItem(
     onClick: () -> Unit,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
-    onDownloadToggle: () -> Unit
+    onDownloadToggle: () -> Unit,
+    isLiked: Boolean,
+    onLikeToggle: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
 
@@ -69,12 +72,22 @@ fun TrackItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            if (isLiked) {
+                Icon(
+                    Icons.Rounded.Favorite,
+                    contentDescription = "Liked",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             if (isDownloaded) {
                 Icon(
                     Icons.Rounded.DownloadDone,
                     contentDescription = "Downloaded",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(20.dp)
                 )
             }
             Box {
@@ -89,6 +102,10 @@ fun TrackItem(
                     DropdownMenuItem(
                         text = { Text("Add to queue") },
                         onClick = { menu = false; onAddToQueue() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (isLiked) "Unlike" else "Like") },
+                        onClick = { menu = false; onLikeToggle() }
                     )
                     DropdownMenuItem(
                         text = { Text(if (isDownloaded) "Remove download" else "Download") },
