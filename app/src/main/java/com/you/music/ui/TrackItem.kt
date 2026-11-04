@@ -40,7 +40,9 @@ fun TrackItem(
     onAddToQueue: () -> Unit,
     onDownloadToggle: () -> Unit,
     isLiked: Boolean,
-    onLikeToggle: () -> Unit
+    onLikeToggle: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onRemove: (() -> Unit)? = null
 ) {
     var menu by remember { mutableStateOf(false) }
 
@@ -104,6 +106,10 @@ fun TrackItem(
                         onClick = { menu = false; onAddToQueue() }
                     )
                     DropdownMenuItem(
+                        text = { Text("Add to playlist") },
+                        onClick = { menu = false; onAddToPlaylist() }
+                    )
+                    DropdownMenuItem(
                         text = { Text(if (isLiked) "Unlike" else "Like") },
                         onClick = { menu = false; onLikeToggle() }
                     )
@@ -111,6 +117,12 @@ fun TrackItem(
                         text = { Text(if (isDownloaded) "Remove download" else "Download") },
                         onClick = { menu = false; onDownloadToggle() }
                     )
+                    if (onRemove != null) {
+                        DropdownMenuItem(
+                            text = { Text("Remove from playlist") },
+                            onClick = { menu = false; onRemove() }
+                        )
+                    }
                 }
             }
         }
