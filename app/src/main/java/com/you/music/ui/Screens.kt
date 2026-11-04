@@ -478,4 +478,103 @@ fun MusicApp(
                     state = state,
                     onOpen = { showPlayer = true },
                     onToggle = toggle,
-                    onNex
+                                        onNext = { controller?.seekToNextMediaItem() }
+                )
+            }
+        }
+
+        // Overlay screens: pointerInput touch ko neeche wali list tak jaane se rokta hai
+        AnimatedVisibility(
+            visible = showPlayer,
+            enter = slideInVertically { it },
+            exit = slideOutVertically { it }
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { } }
+            ) {
+                NowPlayingScreen(state, controller, onClose = { showPlayer = false })
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInVertically { it },
+            exit = slideOutVertically { it }
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures { } }
+            ) {
+                SettingsScreen(settings, themeManager, onClose = { showSettings = false })
+            }
+        }
+
+        val target = addTarget
+        if (target != null) {
+            AddToPlaylistDialog(
+                playlists = playlists,
+                onDismiss = { addTarget = null },
+                onPick = { id ->
+                    Playlists.addSong(id, target)
+                    addTarget = null
+                },
+                onNew = {
+                    createThenAdd = target
+                    addTarget = null
+                    showCreate = true
+                }
+            )
+        }
+
+        if (showCreate) {
+            CreatePlaylistDialog(
+                onDismiss = {
+                    showCreate = false
+                    createThenAdd = null
+                },
+                onCreate = { name ->
+                    val id = Playlists.create(name)
+                    createThenAdd?.let { Playlists.addSong(id, it) }
+                    createThenAdd = null
+                    showCreate = false
+                }
+            )
+        }
+
+        if (showImport) {
+            ImportPlaylistDialog(
+                onDismiss = { showImport = false },
+                onDone = { showImport = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CollectionHeader(
+    name: String,
+    onBack: () -> Unit,
+    onPlayAll: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+        }
+        Text(
+            name,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Button(onClick = onPlayAll) { Text("Play all") }
+    }
+}
