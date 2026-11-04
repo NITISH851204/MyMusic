@@ -1,8 +1,10 @@
 package com.you.music.data
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheWriter
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +19,7 @@ import org.json.JSONObject
 
 object Downloads {
 
+    private lateinit var appContext: Context
     private lateinit var prefs: SharedPreferences
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -30,7 +33,8 @@ object Downloads {
     val error: StateFlow<String?> = _error
 
     fun init(context: Context) {
-        prefs = context.applicationContext.getSharedPreferences("downloads", Context.MODE_PRIVATE)
+        appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences("downloads", Context.MODE_PRIVATE)
         _downloads.value = load()
     }
 
@@ -44,6 +48,7 @@ object Downloads {
 
         _error.value = null
         _progress.update { it + (song.url to 0f) }
+        startService()
 
         scope.launch {
             try {
@@ -82,6 +87,17 @@ object Downloads {
             }
             _downloads.value = _downloads.value.filter { it.url != song.url }
             save()
+        }
+    }
+
+    private fun startService() {
+        try {
+            ContextCompat.startForegroundService(
+                appContext,
+                Intent(appContext, DownloadService::class.java)
+            )
+        } catch (e: Throwable) {
+            // service na chale to bhi download app khuli rehne par chalega
         }
     }
 
