@@ -1,5 +1,6 @@
 package com.you.music.ui.theme
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.animation.animateColorAsState
@@ -11,19 +12,30 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.core.graphics.ColorUtils
+import androidx.core.view.WindowCompat
 import androidx.palette.graphics.Palette
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val THEME_CACHE = "theme_cache"
+private const val SEED_KEY = "seed"
+
+/** Pichli baar ka album-art rang (0 = koi nahi). App shuru hote hi sahi rang dikhane ke liye. */
+fun cachedSeed(context: Context): Int =
+    context.getSharedPreferences(THEME_CACHE, Context.MODE_PRIVATE).getInt(SEED_KEY, 0)
 
 @Composable
 fun AppTheme(
@@ -32,6 +44,7 @@ fun AppTheme(
     content: @Composable () -> Unit
 ) {
     val ctx = LocalContext.current
+    val view = LocalView.current
     val systemDark = isSystemInDarkTheme()
     val dark = when (settings.mode) {
         ThemeMode.SYSTEM -> systemDark
@@ -40,19 +53,46 @@ fun AppTheme(
     }
     val amoled = settings.mode == ThemeMode.AMOLED
 
-    var artSeed by remember { mutableStateOf<Int?>(null) }
+    var artSeed by remember {
+        mutableStateOf(
+            if (settings.artColors) cachedSeed(ctx).takeIf { it != 0 } else null
+        )
+    }
+
     LaunchedEffect(artworkUrl, settings.artColors) {
         if (!settings.artColors) {
             artSeed = null
-        } else if (artworkUrl != null) {
-            extractSeed(ctx, artworkUrl)?.let { artSeed = it }
+        } else {
+            if (artSeed == null) {
+                cachedSeed(ctx).takeIf { it != 0 }?.let { artSeed = it }
+            }
+            if (artworkUrl != null) {
+                extractSeed(ctx, artworkUrl)?.let {
+                    artSeed = it
+                    ctx.getSharedPreferences(THEME_CACHE, Context.MODE_PRIVATE)
+                        .edit().putInt(SEED_KEY, it).apply()
+                }
+            }
         }
     }
 
     val seed = artSeed ?: Presets[settings.preset].color
-    val scheme = schemeFromSeed(seed, dark, amoled)
+    val scheme = animated(schemeFromSeed(seed, dark, amoled))
 
-    MaterialTheme(colorScheme = animated(scheme), content = content)
+    // Status bar aur navigation bar ko app ke background jaisa rakho
+    val bg = scheme.background.toArgb()
+    SideEffect {
+        val window = (view.context as? Activity)?.window
+        if (window != null) {
+            window.statusBarColor = bg
+            window.navigationBarColor = bg
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+        }
+    }
+
+    MaterialTheme(colorScheme = scheme, content = content)
 }
 
 private suspend fun extractSeed(ctx: Context, url: String): Int? =
