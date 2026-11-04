@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.you.music.data.AudioCache
 import com.you.music.data.Downloads
+import com.you.music.data.Likes
 import com.you.music.data.remote.NewPipeDownloader
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.localization.ContentCountry
@@ -25,6 +26,7 @@ class MusicApp : Application() {
 
         AudioCache.init(this)
         Downloads.init(this)
+                Likes.init(this)
 
         NewPipe.init(
             NewPipeDownloader.create(),
