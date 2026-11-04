@@ -25,12 +25,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.you.music.data.Prefs
 import com.you.music.ui.theme.Presets
 import com.you.music.ui.theme.ThemeManager
 import com.you.music.ui.theme.ThemeMode
@@ -44,6 +50,8 @@ fun SettingsScreen(
     onClose: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    var sponsorBlock by remember { mutableStateOf(Prefs.sponsorBlock(ctx)) }
 
     Column(
         Modifier
@@ -56,7 +64,7 @@ fun SettingsScreen(
             IconButton(onClick = onClose) {
                 Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
             }
-            Text("Theme", style = MaterialTheme.typography.headlineSmall)
+            Text("Settings", style = MaterialTheme.typography.headlineSmall)
         }
 
         Spacer(Modifier.size(16.dp))
@@ -76,10 +84,7 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.size(24.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Album art colors", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -128,6 +133,25 @@ fun SettingsScreen(
                     )
                 }
             }
+        }
+
+        Spacer(Modifier.size(24.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("SponsorBlock", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Sponsor, intro/outro aur music se alag hisse apne aap skip karo",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = sponsorBlock,
+                onCheckedChange = {
+                    sponsorBlock = it
+                    Prefs.setSponsorBlock(ctx, it)
+                }
+            )
         }
     }
 }
