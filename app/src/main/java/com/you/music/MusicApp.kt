@@ -2,6 +2,8 @@ package com.you.music
 
 import android.app.Application
 import android.util.Log
+import com.you.music.data.AudioCache
+import com.you.music.data.Downloads
 import com.you.music.data.remote.NewPipeDownloader
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.localization.ContentCountry
@@ -20,6 +22,9 @@ class MusicApp : Application() {
             }
             previous?.uncaughtException(thread, error)
         }
+
+        AudioCache.init(this)
+        Downloads.init(this)
 
         NewPipe.init(
             NewPipeDownloader.create(),
