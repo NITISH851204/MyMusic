@@ -66,6 +66,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.you.music.data.Downloads
+import com.you.music.data.Likes
 import com.you.music.data.MusicRepository
 import com.you.music.data.Song
 import com.you.music.data.toMediaItem
@@ -163,7 +164,12 @@ fun MusicApp(
     val downloaded by Downloads.downloads.collectAsState()
     val progressMap by Downloads.progress.collectAsState()
     val dlError by Downloads.error.collectAsState()
-    val shown = if (tab == 0) results else downloaded
+        val liked by Likes.liked.collectAsState()
+    val shown = when (tab) {
+        0 -> results
+        1 -> downloaded
+        else -> liked
+    }
 
     BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
@@ -295,7 +301,12 @@ fun MusicApp(
                     FilterChip(
                         selected = tab == 1,
                         onClick = { tab = 1 },
-                        label = { Text("Downloads (${downloaded.size})") }
+                                                label = { Text("Offline ${downloaded.size}") }
+                    )
+                    FilterChip(
+                        selected = tab == 2,
+                        onClick = { tab = 2 },
+                        label = { Text("Liked ${liked.size}") }
                     )
                 }
 
@@ -317,7 +328,9 @@ fun MusicApp(
                             onClick = { playAt(index) },
                             onPlayNext = { playNext(song) },
                             onAddToQueue = { addToQueue(song) },
-                            onDownloadToggle = { Downloads.toggle(song) }
+                                                        onDownloadToggle = { Downloads.toggle(song) },
+                            isLiked = liked.any { it.url == song.url },
+                            onLikeToggle = { Likes.toggle(song) }
                         )
                     }
                 }
@@ -338,7 +351,7 @@ fun MusicApp(
             enter = slideInVertically { it },
             exit = slideOutVertically { it }
         ) {
-            PlayerScreen(state, controller, onClose = { showPlayer = false })
+                        NowPlayingScreen(state, controller, onClose = { showPlayer = false })
         }
 
         AnimatedVisibility(
