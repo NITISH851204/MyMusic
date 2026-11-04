@@ -33,6 +33,9 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.FilterChip
+import androidx.compose.runtime.collectAsState
+import com.you.music.data.Downloads
 import com.you.music.ui.theme.ThemeManager
 import com.you.music.ui.theme.ThemeSettings
 import androidx.compose.material.icons.rounded.Shuffle
@@ -157,6 +160,11 @@ fun MusicApp(
     var showPlayer by remember { mutableStateOf(false) }
     var crash by remember { mutableStateOf(lastCrash) }
         var showSettings by remember { mutableStateOf(false) }
+            var tab by remember { mutableStateOf(0) }
+    val downloaded by Downloads.downloads.collectAsState()
+    val progressMap by Downloads.progress.collectAsState()
+    val dlError by Downloads.error.collectAsState()
+    val shown = if (tab == 0) results else downloaded
 
         BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
@@ -178,7 +186,7 @@ fun MusicApp(
 
     val playAt: (Int) -> Unit = { index ->
         controller?.let { c ->
-            c.setMediaItems(results.map { it.toMediaItem() }, index, 0L)
+                        c.setMediaItems(shown.map { it.toMediaItem() }, index, 0L)
             c.prepare()
             c.play()
         }
@@ -210,7 +218,7 @@ fun MusicApp(
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
-    val infoLine = state.error?.let { "Player error: $it" } ?: status
+        val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -272,17 +280,44 @@ fun MusicApp(
                     )
                 }
 
+                                Row(
+                    Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = tab == 0,
+                        onClick = { tab = 0 },
+                        label = { Text("Search") }
+                    )
+                    FilterChip(
+                        selected = tab == 1,
+                        onClick = { tab = 1 },
+                        label = { Text("Downloads (${downloaded.size})") }
+                    )
+                }
+
+                if (tab == 1 && downloaded.isEmpty()) {
+                    Text(
+                        "Abhi koi download nahi. Gaane ke 3-dot menu se Download dabao.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 LazyColumn(Modifier.weight(1f)) {
-                    itemsIndexed(results) { index, song ->
-                        TrackRow(
+                    itemsIndexed(shown) { index, song ->
+                        TrackItem(
                             song = song,
+                            isDownloaded = downloaded.any { it.url == song.url },
+                            progress = progressMap[song.url],
                             onClick = { playAt(index) },
                             onPlayNext = { playNext(song) },
-                            onAddToQueue = { addToQueue(song) }
+                            onAddToQueue = { addToQueue(song) },
+                            onDownloadToggle = { Downloads.toggle(song) }
                         )
                     }
                 }
-            }
 
             if (state.hasMedia) {
                 MiniPlayer(
