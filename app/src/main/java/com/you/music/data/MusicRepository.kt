@@ -11,6 +11,7 @@ import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQu
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 
 data class Song(
     val title: String,
@@ -18,6 +19,8 @@ data class Song(
     val url: String,
     val thumb: String? = null
 )
+
+enum class SearchMode { ALL, SONGS, VIDEOS }
 
 /** Queue me jaane wala item. Asli stream URL playback ke time resolve hota hai. */
 fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
@@ -34,16 +37,58 @@ fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
 
 object MusicRepository {
 
-    suspend fun search(query: String): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun search(
+        query: String,
+        mode: SearchMode = SearchMode.SONGS
+    ): List<Song> = withContext(Dispatchers.IO) {
+        when (mode) {
+            SearchMode.SONGS ->
+                searchWith(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+
+            SearchMode.VIDEOS ->
+                searchWith(query, YoutubeSearchQueryHandlerFactory.VIDEOS)
+
+            SearchMode.ALL -> {
+                var error: Throwable? = null
+                val videos = try {
+                    searchWith(query, YoutubeSearchQueryHandlerFactory.VIDEOS)
+                } catch (e: Throwable) {
+                    error = e
+                    emptyList()
+                }
+                val songs = try {
+                    searchWith(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS)
+                } catch (e: Throwable) {
+                    error = e
+                    emptyList()
+                }
+                val err = error
+                if (videos.isEmpty() && songs.isEmpty() && err != null) throw err
+
+                // Video aur song baari baari se milaate hain, duplicate hata ke
+                val merged = ArrayList<Song>()
+                val seen = HashSet<String>()
+                var i = 0
+                while (i < videos.size || i < songs.size) {
+                    if (i < videos.size && seen.add(videos[i].url)) merged.add(videos[i])
+                    if (i < songs.size && seen.add(songs[i].url)) merged.add(songs[i])
+                    i++
+                }
+                merged
+            }
+        }
+    }
+
+    private fun searchWith(query: String, filter: String): List<Song> {
         val service = ServiceList.YouTube
-        val handler = service.searchQHFactory.fromQuery(
-            query,
-            listOf(YoutubeSearchQueryHandlerFactory.MUSIC_SONGS),
-            ""
-        )
+        val handler = service.searchQHFactory.fromQuery(query, listOf(filter), "")
         val info = SearchInfo.getInfo(service, handler)
-        info.relatedItems
+        return info.relatedItems
             .filterIsInstance<StreamInfoItem>()
+            .filter {
+                it.streamType != StreamType.LIVE_STREAM &&
+                    it.streamType != StreamType.AUDIO_LIVE_STREAM
+            }
             .map {
                 Song(
                     title = it.name,
