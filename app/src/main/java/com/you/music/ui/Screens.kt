@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,8 +52,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.you.music.data.Downloads
+import com.you.music.data.History
 import com.you.music.data.Likes
 import com.you.music.data.MusicRepository
+import com.you.music.data.Playlists
 import com.you.music.data.Song
 import com.you.music.data.toMediaItem
 import com.you.music.ui.theme.ThemeManager
@@ -61,6 +64,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class UiPlayerState {
+    var mediaId by mutableStateOf("")
     var title by mutableStateOf("")
     var artist by mutableStateOf("")
     var artwork by mutableStateOf<String?>(null)
@@ -84,6 +88,7 @@ fun rememberPlayerState(controller: MediaController?): UiPlayerState {
         }
         val sync = {
             state.hasMedia = controller.mediaItemCount > 0
+            state.mediaId = controller.currentMediaItem?.mediaId ?: ""
             state.title = controller.mediaMetadata.title?.toString() ?: ""
             state.artist = controller.mediaMetadata.artist?.toString() ?: ""
             state.artwork = controller.mediaMetadata.artworkUri?.toString()
@@ -139,15 +144,36 @@ fun MusicApp(
     var crash by remember { mutableStateOf(lastCrash) }
     var tab by remember { mutableStateOf(0) }
 
+    var openPlaylistId by remember { mutableStateOf<String?>(null) }
+    var addTarget by remember { mutableStateOf<Song?>(null) }
+    var createThenAdd by remember { mutableStateOf<Song?>(null) }
+    var showCreate by remember { mutableStateOf(false) }
+
     val downloaded by Downloads.downloads.collectAsState()
     val progressMap by Downloads.progress.collectAsState()
     val dlError by Downloads.error.collectAsState()
     val liked by Likes.liked.collectAsState()
+    val playlists by Playlists.all.collectAsState()
+    val recent by History.recent.collectAsState()
+
+    val openPlaylist = playlists.firstOrNull { it.id == openPlaylistId }
 
     val shown = when (tab) {
         0 -> results
         1 -> downloaded
-        else -> liked
+        2 -> liked
+        3 -> openPlaylist?.songs ?: emptyList()
+        else -> recent
+    }
+
+    // 5 second se zyada suna to "Recent" me jodo
+    LaunchedEffect(state.mediaId) {
+        if (state.mediaId.isNotEmpty()) {
+            delay(5000)
+            if (state.mediaId.isNotEmpty() && state.title.isNotEmpty()) {
+                History.add(Song(state.title, state.artist, state.mediaId, state.artwork))
+            }
+        }
     }
 
     val clearSearch: () -> Unit = {
@@ -158,6 +184,7 @@ fun MusicApp(
         focus.clearFocus()
     }
 
+    BackHandler(enabled = tab == 3 && openPlaylist != null) { openPlaylistId = null }
     BackHandler(enabled = searchActive && tab == 0) { clearSearch() }
     BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
@@ -215,6 +242,7 @@ fun MusicApp(
 
     val isHome = tab == 0 && !searchActive
     val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
+    val currentPlaylistId = if (tab == 3) openPlaylist?.id else null
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -271,7 +299,9 @@ fun MusicApp(
                 }
 
                 Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
@@ -292,6 +322,19 @@ fun MusicApp(
                         onClick = { tab = 2 },
                         label = { Text("Liked ${liked.size}") }
                     )
+                    FilterChip(
+                        selected = tab == 3,
+                        onClick = {
+                            tab = 3
+                            openPlaylistId = null
+                        },
+                        label = { Text("Playlists ${playlists.size}") }
+                    )
+                    FilterChip(
+                        selected = tab == 4,
+                        onClick = { tab = 4 },
+                        label = { Text("Recent") }
+                    )
                 }
 
                 if (isHome) {
@@ -299,7 +342,31 @@ fun MusicApp(
                         onPlay = { list, index -> playList(list, index) },
                         modifier = Modifier.weight(1f)
                     )
+                } else if (tab == 3 && openPlaylist == null) {
+                    PlaylistList(
+                        playlists = playlists,
+                        onOpen = { openPlaylistId = it },
+                        onNew = {
+                            createThenAdd = null
+                            showCreate = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 } else {
+                    if (tab == 3 && openPlaylist != null) {
+                        PlaylistHeader(
+                            name = openPlaylist.name,
+                            onBack = { openPlaylistId = null },
+                            onPlayAll = {
+                                if (openPlaylist.songs.isNotEmpty()) playList(openPlaylist.songs, 0)
+                            },
+                            onDelete = {
+                                Playlists.delete(openPlaylist.id)
+                                openPlaylistId = null
+                            }
+                        )
+                    }
+
                     if (infoLine.isNotBlank()) {
                         Text(
                             infoLine,
@@ -309,17 +376,20 @@ fun MusicApp(
                         )
                     }
 
-                    if (tab == 1 && downloaded.isEmpty()) {
-                        Text(
-                            "Abhi koi download nahi. Gaane ke 3-dot menu se Download dabao.",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    val emptyText = when {
+                        tab == 1 && downloaded.isEmpty() ->
+                            "Abhi koi download nahi. Gaane ke 3-dot menu se Download dabao."
+                        tab == 2 && liked.isEmpty() ->
+                            "Abhi koi liked gaana nahi. Player me ♥ dabao."
+                        tab == 3 && openPlaylist != null && openPlaylist.songs.isEmpty() ->
+                            "Ye playlist khali hai. Gaane ke 3-dot menu se Add to playlist karo."
+                        tab == 4 && recent.isEmpty() ->
+                            "Abhi kuch nahi suna. Jo gaana 5 second se zyada sunoge, yahan aayega."
+                        else -> null
                     }
-                    if (tab == 2 && liked.isEmpty()) {
+                    if (emptyText != null) {
                         Text(
-                            "Abhi koi liked gaana nahi. Player me ♥ dabao.",
+                            emptyText,
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -337,7 +407,11 @@ fun MusicApp(
                                 onAddToQueue = { addToQueue(song) },
                                 onDownloadToggle = { Downloads.toggle(song) },
                                 isLiked = liked.any { it.url == song.url },
-                                onLikeToggle = { Likes.toggle(song) }
+                                onLikeToggle = { Likes.toggle(song) },
+                                onAddToPlaylist = { addTarget = song },
+                                onRemove = currentPlaylistId?.let { pid ->
+                                    { Playlists.removeSong(pid, song.url) }
+                                }
                             )
                         }
                     }
@@ -368,6 +442,38 @@ fun MusicApp(
             exit = slideOutVertically { it }
         ) {
             SettingsScreen(settings, themeManager, onClose = { showSettings = false })
+        }
+
+        val target = addTarget
+        if (target != null) {
+            AddToPlaylistDialog(
+                playlists = playlists,
+                onDismiss = { addTarget = null },
+                onPick = { id ->
+                    Playlists.addSong(id, target)
+                    addTarget = null
+                },
+                onNew = {
+                    createThenAdd = target
+                    addTarget = null
+                    showCreate = true
+                }
+            )
+        }
+
+        if (showCreate) {
+            CreatePlaylistDialog(
+                onDismiss = {
+                    showCreate = false
+                    createThenAdd = null
+                },
+                onCreate = { name ->
+                    val id = Playlists.create(name)
+                    createThenAdd?.let { Playlists.addSong(id, it) }
+                    createThenAdd = null
+                    showCreate = false
+                }
+            )
         }
     }
 }
