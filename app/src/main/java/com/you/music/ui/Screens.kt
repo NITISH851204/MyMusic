@@ -4,19 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -26,18 +21,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.SkipNext
-import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,10 +44,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -134,15 +119,6 @@ fun rememberPlayerState(controller: MediaController?): UiPlayerState {
     return state
 }
 
-private fun fmt(ms: Long): String {
-    val s = ms / 1000
-    return "%d:%02d".format(s / 60, s % 60)
-}
-
-/** YouTube Music ki chhoti thumbnail ko badi size me badalta hai (player screen ke liye). */
-private fun String.hiRes(): String =
-    replace(Regex("=w\\d+-h\\d+"), "=w800-h800")
-
 @Composable
 fun MusicApp(
     controller: MediaController?,
@@ -157,20 +133,32 @@ fun MusicApp(
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>>(emptyList()) }
     var status by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
     var showPlayer by remember { mutableStateOf(false) }
-    var crash by remember { mutableStateOf(lastCrash) }
     var showSettings by remember { mutableStateOf(false) }
+    var crash by remember { mutableStateOf(lastCrash) }
     var tab by remember { mutableStateOf(0) }
+
     val downloaded by Downloads.downloads.collectAsState()
     val progressMap by Downloads.progress.collectAsState()
     val dlError by Downloads.error.collectAsState()
-        val liked by Likes.liked.collectAsState()
+    val liked by Likes.liked.collectAsState()
+
     val shown = when (tab) {
         0 -> results
         1 -> downloaded
         else -> liked
     }
 
+    val clearSearch: () -> Unit = {
+        query = ""
+        results = emptyList()
+        status = ""
+        searchActive = false
+        focus.clearFocus()
+    }
+
+    BackHandler(enabled = searchActive && tab == 0) { clearSearch() }
     BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
 
@@ -178,6 +166,7 @@ fun MusicApp(
         if (query.isNotBlank()) {
             focus.clearFocus()
             tab = 0
+            searchActive = true
             scope.launch {
                 status = "Searching..."
                 try {
@@ -190,9 +179,9 @@ fun MusicApp(
         }
     }
 
-    val playAt: (Int) -> Unit = { index ->
+    val playList: (List<Song>, Int) -> Unit = { list, index ->
         controller?.let { c ->
-            c.setMediaItems(shown.map { it.toMediaItem() }, index, 0L)
+            c.setMediaItems(list.map { it.toMediaItem() }, index, 0L)
             c.prepare()
             c.play()
         }
@@ -224,21 +213,36 @@ fun MusicApp(
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
+    val isHome = tab == 0 && !searchActive
     val infoLine = state.error?.let { "Player error: $it" } ?: dlError ?: status
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
+
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, top = 12.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "Tracks",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.weight(1f)
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(28.dp),
+                        placeholder = { Text("Search song") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (query.isNotEmpty() || searchActive) {
+                                IconButton(onClick = clearSearch) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Clear")
+                                }
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { doSearch() })
                     )
                     IconButton(onClick = { showSettings = true }) {
                         Icon(Icons.Rounded.Settings, contentDescription = "Settings")
@@ -266,42 +270,22 @@ fun MusicApp(
                     }
                 }
 
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(28.dp),
-                    placeholder = { Text("Search songs") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { doSearch() })
-                )
-
-                if (infoLine.isNotBlank()) {
-                    Text(
-                        infoLine,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
                 Row(
-                    Modifier.padding(horizontal = 16.dp),
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
                         selected = tab == 0,
-                        onClick = { tab = 0 },
-                        label = { Text("Search") }
+                        onClick = {
+                            tab = 0
+                            searchActive = false
+                        },
+                        label = { Text("Home") }
                     )
                     FilterChip(
                         selected = tab == 1,
                         onClick = { tab = 1 },
-                                                label = { Text("Offline ${downloaded.size}") }
+                        label = { Text("Offline ${downloaded.size}") }
                     )
                     FilterChip(
                         selected = tab == 2,
@@ -310,28 +294,52 @@ fun MusicApp(
                     )
                 }
 
-                if (tab == 1 && downloaded.isEmpty()) {
-                    Text(
-                        "Abhi koi download nahi. Gaane ke 3-dot menu se Download dabao.",
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (isHome) {
+                    HomeScreen(
+                        onPlay = { list, index -> playList(list, index) },
+                        modifier = Modifier.weight(1f)
                     )
-                }
-
-                LazyColumn(Modifier.weight(1f)) {
-                    itemsIndexed(shown) { index, song ->
-                        TrackItem(
-                            song = song,
-                            isDownloaded = downloaded.any { it.url == song.url },
-                            progress = progressMap[song.url],
-                            onClick = { playAt(index) },
-                            onPlayNext = { playNext(song) },
-                            onAddToQueue = { addToQueue(song) },
-                                                        onDownloadToggle = { Downloads.toggle(song) },
-                            isLiked = liked.any { it.url == song.url },
-                            onLikeToggle = { Likes.toggle(song) }
+                } else {
+                    if (infoLine.isNotBlank()) {
+                        Text(
+                            infoLine,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+
+                    if (tab == 1 && downloaded.isEmpty()) {
+                        Text(
+                            "Abhi koi download nahi. Gaane ke 3-dot menu se Download dabao.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (tab == 2 && liked.isEmpty()) {
+                        Text(
+                            "Abhi koi liked gaana nahi. Player me ♥ dabao.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    LazyColumn(Modifier.weight(1f)) {
+                        itemsIndexed(shown) { index, song ->
+                            TrackItem(
+                                song = song,
+                                isDownloaded = downloaded.any { it.url == song.url },
+                                progress = progressMap[song.url],
+                                onClick = { playList(shown, index) },
+                                onPlayNext = { playNext(song) },
+                                onAddToQueue = { addToQueue(song) },
+                                onDownloadToggle = { Downloads.toggle(song) },
+                                isLiked = liked.any { it.url == song.url },
+                                onLikeToggle = { Likes.toggle(song) }
+                            )
+                        }
                     }
                 }
             }
@@ -351,7 +359,7 @@ fun MusicApp(
             enter = slideInVertically { it },
             exit = slideOutVertically { it }
         ) {
-                        NowPlayingScreen(state, controller, onClose = { showPlayer = false })
+            NowPlayingScreen(state, controller, onClose = { showPlayer = false })
         }
 
         AnimatedVisibility(
@@ -360,148 +368,6 @@ fun MusicApp(
             exit = slideOutVertically { it }
         ) {
             SettingsScreen(settings, themeManager, onClose = { showSettings = false })
-        }
-    }
-}
-
-@Composable
-fun PlayerScreen(state: UiPlayerState, controller: MediaController?, onClose: () -> Unit) {
-    val progress =
-        if (state.duration > 0) (state.position.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
-    val inactive = MaterialTheme.colorScheme.onSurfaceVariant
-    val active = MaterialTheme.colorScheme.primary
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close")
-            }
-            Spacer(Modifier.weight(1f))
-            Text("Now playing", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.weight(1f))
-            Spacer(Modifier.size(48.dp))
-        }
-
-        Spacer(Modifier.size(16.dp))
-
-        Art(
-            state.artwork?.hiRes(),
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .border(
-                    2.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    RoundedCornerShape(28.dp)
-                ),
-            28.dp
-        )
-
-        Spacer(Modifier.size(28.dp))
-
-        Text(
-            state.title,
-            style = MaterialTheme.typography.titleLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            state.artist,
-            style = MaterialTheme.typography.bodyMedium,
-            color = inactive,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Spacer(Modifier.size(20.dp))
-
-        WavySeekbar(
-            progress = progress,
-            isPlaying = state.isPlaying,
-            onSeek = { f ->
-                if (state.duration > 0) {
-                    controller?.seekTo((f * state.duration).toLong())
-                }
-            }
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(fmt(state.position), style = MaterialTheme.typography.bodySmall)
-            Text(fmt(state.duration), style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(Modifier.size(16.dp))
-
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
-            }) {
-                Icon(
-                    Icons.Rounded.Shuffle,
-                    contentDescription = "Shuffle",
-                    tint = if (state.shuffle) active else inactive
-                )
-            }
-            IconButton(onClick = { controller?.seekToPreviousMediaItem() }) {
-                Icon(
-                    Icons.Rounded.SkipPrevious,
-                    contentDescription = "Previous",
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            FilledIconButton(
-                onClick = {
-                    controller?.let { if (it.isPlaying) it.pause() else it.play() }
-                },
-                modifier = Modifier.size(72.dp)
-            ) {
-                Icon(
-                    if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = "Play/Pause",
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-            IconButton(onClick = { controller?.seekToNextMediaItem() }) {
-                Icon(
-                    Icons.Rounded.SkipNext,
-                    contentDescription = "Next",
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-            IconButton(onClick = {
-                controller?.let {
-                    it.repeatMode = when (it.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                }
-            }) {
-                Icon(
-                    if (state.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne
-                    else Icons.Rounded.Repeat,
-                    contentDescription = "Repeat",
-                    tint = if (state.repeat == Player.REPEAT_MODE_OFF) inactive else active
-                )
-            }
-        }
-
-        if (state.error != null) {
-            Spacer(Modifier.size(12.dp))
-            Text(
-                "Player error: ${state.error}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Red
-            )
         }
     }
 }
