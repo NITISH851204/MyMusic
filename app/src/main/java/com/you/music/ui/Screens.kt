@@ -32,6 +32,9 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import com.you.music.ui.theme.ThemeManager
+import com.you.music.ui.theme.ThemeSettings
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -137,17 +140,25 @@ private fun String.hiRes(): String =
     replace(Regex("=w\\d+-h\\d+"), "=w800-h800")
 
 @Composable
-fun MusicApp(controller: MediaController?, lastCrash: String?) {
+fun MusicApp(
+    controller: MediaController?,
+    state: UiPlayerState,
+    lastCrash: String?,
+    settings: ThemeSettings,
+    themeManager: ThemeManager
+) {
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
-    val state = rememberPlayerState(controller)
+    
 
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Song>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var showPlayer by remember { mutableStateOf(false) }
     var crash by remember { mutableStateOf(lastCrash) }
+        var showSettings by remember { mutableStateOf(false) }
 
+        BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showPlayer) { showPlayer = false }
 
     val doSearch: () -> Unit = {
@@ -204,11 +215,21 @@ fun MusicApp(controller: MediaController?, lastCrash: String?) {
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    "Tracks",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp)
-                )
+                                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Tracks",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                    }
+                }
 
                 val c = crash
                 if (c != null) {
@@ -278,7 +299,15 @@ fun MusicApp(controller: MediaController?, lastCrash: String?) {
             enter = slideInVertically { it },
             exit = slideOutVertically { it }
         ) {
-            PlayerScreen(state, controller, onClose = { showPlayer = false })
+                        PlayerScreen(state, controller, onClose = { showPlayer = false })
+        }
+
+        AnimatedVisibility(
+            visible = showSettings,
+            enter = slideInVertically { it },
+            exit = slideOutVertically { it }
+        ) {
+            SettingsScreen(settings, themeManager, onClose = { showSettings = false })
         }
     }
 }
