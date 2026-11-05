@@ -1,21 +1,66 @@
 name: Build APK
+
 on:
   push:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "GitHub Release bana ke APK upload karo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-      - run: gradle assembleDebug --stacktrace
+
+      - name: Keystore taiyaar karo
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Signed release build"
+          else
+            echo "KEYSTORE_B64 secret nahi mila, debug key se sign hoga"
+          fi
+
+      - name: Release APK banao
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: gradle assembleRelease --stacktrace
+
+      - name: APK ka naam badlo
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk "dist/MyMusic-v1.0.${{ github.run_number }}.apk"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: MyMusic-apk
+          path: dist/*.apk
+
+      - name: GitHub Release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" dist/*.apk \
+            --title "MyMusic v1.0.${{ github.run_number }}" \
+            --notes "Open-source, ad-free YouTube Music client. APK download karke install karo."
