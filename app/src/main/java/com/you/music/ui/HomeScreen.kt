@@ -27,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,6 +51,8 @@ import com.you.music.data.ArtistEntry
 import com.you.music.data.Category
 import com.you.music.data.HomeData
 import com.you.music.data.HomeRepository
+import com.you.music.data.Lang
+import com.you.music.data.Prefs
 import com.you.music.data.Song
 import kotlinx.coroutines.launch
 
@@ -64,17 +68,28 @@ fun HomeScreen(
     onOpenCollection: (String, List<Song>) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var data by remember { mutableStateOf<HomeData?>(HomeRepository.cachedData()) }
+    val ctx = LocalContext.current
+    var lang by remember {
+        mutableStateOf(if (Prefs.language(ctx) == "english") Lang.ENGLISH else Lang.HINDI)
+    }
+    var data by remember(lang) { mutableStateOf(HomeRepository.cachedData(lang)) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(reloadKey) {
+    LaunchedEffect(lang, reloadKey) {
         if (reloadKey > 0) data = null
         if (data == null) {
-            data = HomeRepository.load(force = reloadKey > 0)
+            data = HomeRepository.load(lang, force = reloadKey > 0)
         }
     }
 
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 16.dp)) {
+        item {
+            LanguageSwitch(lang) { picked ->
+                Prefs.setLanguage(ctx, picked.code)
+                lang = picked
+            }
+        }
+
         val d = data
         when {
             d == null -> item {
@@ -106,34 +121,54 @@ fun HomeScreen(
             }
 
             else -> {
-                if (d.forYou.isNotEmpty()) {
-                    item { SectionTitle("For You") }
-                    item { SongRow(d.forYou, onPlay) }
-                }
-                if (d.hits.isNotEmpty()) {
-                    item { SectionTitle("Hit Song") }
-                    item { HeroCard(d.hits[0]) { onPlay(d.hits, 0) } }
+                if (d.recommended.isNotEmpty()) {
+                    item { SectionTitle("Recommended") }
+                    item { SongRow(d.recommended, onPlay) }
                 }
                 if (d.fresh.isNotEmpty()) {
                     item { SectionTitle("New Song") }
                     item { SongRow(d.fresh, onPlay) }
                 }
+                if (d.popular.isNotEmpty()) {
+                    item { SectionTitle("Today Popular Song") }
+                    item { SongRow(d.popular, onPlay) }
+                }
+                if (d.hits.isNotEmpty()) {
+                    item { SectionTitle("Hit Song") }
+                    item { HeroCard(d.hits[0]) { onPlay(d.hits, 0) } }
+                }
 
-                // ---- Scroll karne ke baad wale naye rows ----
-                item { Spacer24() }
-                item { CategoryRow(HomeRepository.hindiRow, onOpenCollection) }
-                item { CategoryRow(HomeRepository.englishRow, onOpenCollection) }
-                item { CategoryRow(HomeRepository.playlistRow, onOpenCollection) }
+                val cfg = HomeRepository.config(lang)
+                cfg.rows.forEach { row ->
+                    item { CategoryRow(row, onOpenCollection) }
+                }
                 item { SectionTitle("Artists") }
-                item { ArtistRow(HomeRepository.artists, onOpenCollection) }
+                item { ArtistRow(cfg.artists, onOpenCollection) }
             }
         }
     }
 }
 
 @Composable
-private fun Spacer24() {
-    Box(Modifier.height(8.dp))
+private fun LanguageSwitch(current: Lang, onPick: (Lang) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Lang.values().forEach { l ->
+            if (l == current) {
+                Button(onClick = { onPick(l) }, modifier = Modifier.weight(1f)) {
+                    Text(l.label)
+                }
+            } else {
+                OutlinedButton(onClick = { onPick(l) }, modifier = Modifier.weight(1f)) {
+                    Text(l.label)
+                }
+            }
+        }
+    }
 }
 
 @Composable
