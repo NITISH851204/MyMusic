@@ -15,16 +15,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.you.music.data.Accounts
 import com.you.music.data.Prefs
 import com.you.music.ui.theme.Presets
 import com.you.music.ui.theme.ThemeManager
@@ -68,6 +78,9 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.size(16.dp))
+        AccountSection()
+
+        Spacer(Modifier.size(24.dp))
         Text("Mode", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.size(8.dp))
         Row(
@@ -154,4 +167,109 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+@Composable
+private fun AccountSection() {
+    val user by Accounts.current.collectAsState()
+    var dialog by remember { mutableStateOf<String?>(null) }
+
+    Text("Account", style = MaterialTheme.typography.titleMedium)
+    Text(
+        if (user == null) "Guest" else "@$user",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 4.dp)
+    )
+    Spacer(Modifier.size(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (user == null) {
+            Button(onClick = { dialog = "login" }) { Text("Login") }
+            OutlinedButton(onClick = { dialog = "register" }) { Text("Create account") }
+        } else {
+            OutlinedButton(onClick = { Accounts.logout() }) { Text("Logout") }
+        }
+    }
+    Text(
+        "Har account ke liked, playlists, recent aur offline list alag hote hain. Ye sirf is phone me save hota hai. Password bhool gaye to recover nahi hota.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp)
+    )
+
+    val d = dialog
+    if (d != null) {
+        AuthDialog(
+            register = d == "register",
+            onDismiss = { dialog = null },
+            onDone = { dialog = null }
+        )
+    }
+}
+
+@Composable
+private fun AuthDialog(register: Boolean, onDismiss: () -> Unit, onDone: () -> Unit) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var password2 by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (register) "Create account" else "Login") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    singleLine = true,
+                    label = { Text("Username") }
+                )
+                Spacer(Modifier.size(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    singleLine = true,
+                    label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                if (register) {
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(
+                        value = password2,
+                        onValueChange = { password2 = it },
+                        singleLine = true,
+                        label = { Text("Password dobara") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                }
+                val e = error
+                if (e != null) {
+                    Spacer(Modifier.size(8.dp))
+                    Text(
+                        e,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (register && password != password2) {
+                    error = "Dono password same nahi hain"
+                } else {
+                    val result = if (register) {
+                        Accounts.register(username, password)
+                    } else {
+                        Accounts.login(username, password)
+                    }
+                    if (result == null) onDone() else error = result
+                }
+            }) { Text(if (register) "Create" else "Login") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
