@@ -2,6 +2,7 @@ package com.you.music
 
 import android.app.Application
 import android.util.Log
+import com.you.music.data.Accounts
 import com.you.music.data.AudioCache
 import com.you.music.data.Downloads
 import com.you.music.data.History
@@ -27,6 +28,9 @@ class MusicApp : Application() {
         }
 
         AudioCache.init(this)
+
+        // Accounts sabse pehle, taaki baaki stores sahi user ka data padhein
+        Accounts.init(this)
         Downloads.init(this)
         Likes.init(this)
         Playlists.init(this)
