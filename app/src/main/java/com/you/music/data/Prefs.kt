@@ -11,4 +11,17 @@ object Prefs {
     fun setSponsorBlock(c: Context, value: Boolean) {
         p(c).edit().putBoolean("sponsorblock", value).apply()
     }
+
+    fun volumeShortcut(c: Context): Boolean = p(c).getBoolean("volume_shortcut", true)
+
+    fun setVolumeShortcut(c: Context, value: Boolean) {
+        p(c).edit().putBoolean("volume_shortcut", value).apply()
+    }
+
+    /** "hindi" ya "english" */
+    fun language(c: Context): String = p(c).getString("language", "hindi") ?: "hindi"
+
+    fun setLanguage(c: Context, value: String) {
+        p(c).edit().putString("language", value).apply()
+    }
 }
