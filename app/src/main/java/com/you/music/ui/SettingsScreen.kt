@@ -77,8 +77,10 @@ fun SettingsScreen(
             Text("Settings", style = MaterialTheme.typography.headlineSmall)
         }
 
-        Spacer(Modifier.size(16.dp))
+                Spacer(Modifier.size(16.dp))
         AccountSection()
+        Spacer(Modifier.size(24.dp))
+        ExtraSettings()
 
         Spacer(Modifier.size(24.dp))
         Text("Mode", style = MaterialTheme.typography.titleMedium)
