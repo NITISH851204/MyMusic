@@ -12,62 +12,114 @@ import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import java.util.concurrent.ConcurrentHashMap
 
+enum class Lang(val label: String, val code: String) {
+    HINDI("Hindi", "hindi"),
+    ENGLISH("English", "english")
+}
+
 data class Category(val title: String, val query: String)
 
 data class ArtistEntry(val name: String, val query: String)
 
 data class HomeData(
-    val forYou: List<Song>,
-    val hits: List<Song>,
-    val fresh: List<Song>
+    val recommended: List<Song>,
+    val fresh: List<Song>,
+    val popular: List<Song>,
+    val hits: List<Song>
 ) {
     val isEmpty: Boolean
-        get() = forYou.isEmpty() && hits.isEmpty() && fresh.isEmpty()
+        get() = recommended.isEmpty() && fresh.isEmpty() && popular.isEmpty() && hits.isEmpty()
 }
+
+data class HomeConfig(
+    val recommendedDefault: String,
+    val fresh: String,
+    val popular: String,
+    val hits: String,
+    val rows: List<List<Category>>,
+    val artists: List<ArtistEntry>
+)
 
 object HomeRepository {
 
-    // ---- Upar wale rows ----
-    private const val HIT_QUERY = "top hindi songs"
-    private const val NEW_QUERY = "new hindi songs 2026"
-    private const val DEFAULT_FOR_YOU = "romantic hindi songs"
-
-    // ---- Neeche wale rows (pehla card bada dikhta hai) ----
-    val hindiRow = listOf(
-        Category("Hindi Songs", "hindi songs"),
-        Category("90s", "90s hindi songs"),
-        Category("80s", "80s hindi songs"),
-        Category("2000s", "2000s hindi songs"),
-        Category("Retro", "old hindi classic songs")
+    // ---- Yahan queries apni pasand se badal sakte ho ----
+    private val hindi = HomeConfig(
+        recommendedDefault = "romantic hindi songs",
+        fresh = "new hindi songs 2026",
+        popular = "trending hindi songs today",
+        hits = "top hindi songs",
+        rows = listOf(
+            listOf(
+                Category("Hindi Songs", "hindi songs"),
+                Category("90s", "90s hindi songs"),
+                Category("80s", "80s hindi songs"),
+                Category("2000s", "2000s hindi songs"),
+                Category("Retro", "old hindi classic songs")
+            ),
+            listOf(
+                Category("Hindi Playlist", "hindi playlist best songs"),
+                Category("Hindi Love Playlist", "hindi love songs"),
+                Category("Party Playlist", "bollywood party songs"),
+                Category("Sad Playlist", "hindi sad songs")
+            ),
+            listOf(
+                Category("Punjabi Hits", "punjabi hit songs"),
+                Category("Lo-fi Hindi", "hindi lofi songs"),
+                Category("Devotional", "bhakti songs")
+            )
+        ),
+        artists = listOf(
+            ArtistEntry("KR\$NA", "KRSNA"),
+            ArtistEntry("Yo Yo Honey Singh", "Yo Yo Honey Singh"),
+            ArtistEntry("Arijit Singh", "Arijit Singh"),
+            ArtistEntry("Badshah", "Badshah"),
+            ArtistEntry("Diljit Dosanjh", "Diljit Dosanjh"),
+            ArtistEntry("Atif Aslam", "Atif Aslam"),
+            ArtistEntry("Shreya Ghoshal", "Shreya Ghoshal"),
+            ArtistEntry("Neha Kakkar", "Neha Kakkar")
+        )
     )
 
-    val englishRow = listOf(
-        Category("English Pop", "english pop songs"),
-        Category("Hip Hop", "english hip hop hits"),
-        Category("Lo-fi", "lofi songs"),
-        Category("Rock", "rock hits")
+    private val english = HomeConfig(
+        recommendedDefault = "english pop songs",
+        fresh = "new english songs 2026",
+        popular = "trending english songs today",
+        hits = "top english songs",
+        rows = listOf(
+            listOf(
+                Category("English Pop", "english pop songs"),
+                Category("Hip Hop", "english hip hop hits"),
+                Category("Rock", "rock hits"),
+                Category("R&B", "rnb songs")
+            ),
+            listOf(
+                Category("90s", "90s english hits"),
+                Category("2000s", "2000s english hits"),
+                Category("Retro", "classic english hits 80s")
+            ),
+            listOf(
+                Category("Chill Playlist", "chill english songs"),
+                Category("Workout Playlist", "english workout songs"),
+                Category("Party Playlist", "english party songs"),
+                Category("Lo-fi", "lofi songs")
+            )
+        ),
+        artists = listOf(
+            ArtistEntry("Taylor Swift", "Taylor Swift"),
+            ArtistEntry("The Weeknd", "The Weeknd"),
+            ArtistEntry("Ed Sheeran", "Ed Sheeran"),
+            ArtistEntry("Billie Eilish", "Billie Eilish"),
+            ArtistEntry("Dua Lipa", "Dua Lipa"),
+            ArtistEntry("Eminem", "Eminem"),
+            ArtistEntry("Justin Bieber", "Justin Bieber"),
+            ArtistEntry("Imagine Dragons", "Imagine Dragons")
+        )
     )
 
-    val playlistRow = listOf(
-        Category("Hindi Playlist", "hindi playlist best songs"),
-        Category("Hindi Love Playlist", "hindi love songs"),
-        Category("Party Playlist", "bollywood party songs"),
-        Category("Sad Playlist", "hindi sad songs")
-    )
+    fun config(lang: Lang): HomeConfig = if (lang == Lang.ENGLISH) english else hindi
 
-    val artists = listOf(
-        ArtistEntry("KR\$NA", "KRSNA"),
-        ArtistEntry("Yo Yo Honey Singh", "Yo Yo Honey Singh"),
-        ArtistEntry("Arijit Singh", "Arijit Singh"),
-        ArtistEntry("Badshah", "Badshah"),
-        ArtistEntry("Diljit Dosanjh", "Diljit Dosanjh"),
-        ArtistEntry("Atif Aslam", "Atif Aslam"),
-        ArtistEntry("Shreya Ghoshal", "Shreya Ghoshal"),
-        ArtistEntry("Neha Kakkar", "Neha Kakkar")
-    )
-
-    private var cached: HomeData? = null
-    private var cachedAt = 0L
+    private val cache = ConcurrentHashMap<Lang, HomeData>()
+    private val cachedAt = ConcurrentHashMap<Lang, Long>()
 
     private val collections = ConcurrentHashMap<String, List<Song>>()
     private val images = ConcurrentHashMap<String, String>()
@@ -75,32 +127,36 @@ object HomeRepository {
     // Ek saath 3 se zyada search nahi, taaki YouTube block na kare
     private val gate = Semaphore(3)
 
-    fun cachedData(): HomeData? = cached
+    fun cachedData(lang: Lang): HomeData? = cache[lang]
 
     fun peekCollection(query: String): List<Song>? = collections[query]
 
     fun peekArtistImage(name: String): String? = images[name]
 
-    suspend fun load(force: Boolean = false): HomeData = coroutineScope {
-        val old = cached
-        if (!force && old != null && System.currentTimeMillis() - cachedAt < 30 * 60 * 1000L) {
+    suspend fun load(lang: Lang, force: Boolean = false): HomeData = coroutineScope {
+        val old = cache[lang]
+        val at = cachedAt[lang] ?: 0L
+        if (!force && old != null && System.currentTimeMillis() - at < 30 * 60 * 1000L) {
             return@coroutineScope old
         }
 
-        val forYouQuery = forYouQuery()
-        val a = async { safeSearch(forYouQuery) }
-        val b = async { safeSearch(HIT_QUERY) }
-        val c = async { safeSearch(NEW_QUERY) }
+        val cfg = config(lang)
+        val a = async { safeSearch(recommendedQuery(cfg)) }
+        val b = async { safeSearch(cfg.fresh) }
+        val c = async { safeSearch(cfg.popular) }
+        val d = async { safeSearch(cfg.hits) }
 
-        val hits = b.await().take(10)
-        val seen = hits.map { it.url }.toMutableSet()
-        val forYou = a.await().filter { seen.add(it.url) }.take(10)
-        val fresh = c.await().filter { seen.add(it.url) }.take(10)
+        // Ek gaana kisi do rows me repeat na ho
+        val recommended = a.await().take(10)
+        val seen = recommended.map { it.url }.toMutableSet()
+        val fresh = b.await().filter { seen.add(it.url) }.take(10)
+        val popular = c.await().filter { seen.add(it.url) }.take(10)
+        val hits = d.await().filter { seen.add(it.url) }.take(10)
 
-        val data = HomeData(forYou, hits, fresh)
+        val data = HomeData(recommended, fresh, popular, hits)
         if (!data.isEmpty) {
-            cached = data
-            cachedAt = System.currentTimeMillis()
+            cache[lang] = data
+            cachedAt[lang] = System.currentTimeMillis()
         }
         data
     }
@@ -154,7 +210,8 @@ object HomeRepository {
             emptyList()
         }
 
-    private fun forYouQuery(): String {
+    /** Sabse zyada liked artist ke gaane, warna us bhasha ka default */
+    private fun recommendedQuery(cfg: HomeConfig): String {
         val artist = Likes.liked.value
             .map { it.artist.split(",", "&").first().trim() }
             .filter { it.isNotEmpty() && it != "Unknown" }
@@ -162,6 +219,6 @@ object HomeRepository {
             .eachCount()
             .maxByOrNull { it.value }
             ?.key
-        return if (artist != null) "$artist songs" else DEFAULT_FOR_YOU
+        return if (artist != null) "$artist songs" else cfg.recommendedDefault
     }
 }
