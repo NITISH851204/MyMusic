@@ -34,6 +34,7 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
+        PlaybackHolder.player = player
         session = MediaSession.Builder(this, player).build()
         skipper = SponsorSkipper(applicationContext, player, scope)
     }
@@ -43,6 +44,8 @@ class PlaybackService : MediaSessionService() {
     ): MediaSession? = session
 
     override fun onDestroy() {
+        SleepTimer.cancel()
+        PlaybackHolder.player = null
         skipper?.release()
         scope.cancel()
         session?.run {
