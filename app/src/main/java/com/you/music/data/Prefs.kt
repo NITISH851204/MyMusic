@@ -20,6 +20,7 @@ object Prefs {
 
     /** "hindi" ya "english" */
     fun language(c: Context): String = p(c).getString("language", "hindi") ?: "hindi"
+        fun languageOrNull(c: Context): String? = p(c).getString("language", null)
 
     fun setLanguage(c: Context, value: String) {
         p(c).edit().putString("language", value).apply()
