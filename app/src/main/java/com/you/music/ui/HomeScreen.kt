@@ -32,6 +32,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import com.you.music.data.AppLanguage
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,10 +70,8 @@ fun HomeScreen(
     onOpenCollection: (String, List<Song>) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val ctx = LocalContext.current
-    var lang by remember {
-        mutableStateOf(if (Prefs.language(ctx) == "english") Lang.ENGLISH else Lang.HINDI)
-    }
+        val langState by AppLanguage.current.collectAsState()
+    val lang = langState ?: Lang.HINDI
     var data by remember(lang) { mutableStateOf(HomeRepository.cachedData(lang)) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
@@ -83,12 +83,7 @@ fun HomeScreen(
     }
 
     LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 16.dp)) {
-        item {
-            LanguageSwitch(lang) { picked ->
-                Prefs.setLanguage(ctx, picked.code)
-                lang = picked
-            }
-        }
+        
 
         val d = data
         when {
