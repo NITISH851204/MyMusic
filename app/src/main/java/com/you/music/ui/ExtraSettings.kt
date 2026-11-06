@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.you.music.data.AppLanguage
+import com.you.music.data.Lang
 import com.you.music.data.Prefs
 import com.you.music.playback.SleepTimer
 import kotlinx.coroutines.delay
@@ -35,6 +37,9 @@ fun ExtraSettings() {
     val ctx = LocalContext.current
     var volumeShortcut by remember { mutableStateOf(Prefs.volumeShortcut(ctx)) }
 
+    LanguageSetting()
+
+    Spacer(Modifier.size(24.dp))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Volume button shortcut", style = MaterialTheme.typography.titleMedium)
@@ -55,6 +60,29 @@ fun ExtraSettings() {
 
     Spacer(Modifier.size(24.dp))
     SleepTimerSection()
+}
+
+@Composable
+private fun LanguageSetting() {
+    val ctx = LocalContext.current
+    val lang by AppLanguage.current.collectAsState()
+
+    Text("Language / भाषा", style = MaterialTheme.typography.titleMedium)
+    Text(
+        "Home ke gaane aur artists is bhasha ke hisaab se aate hain",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Lang.values().forEach { l ->
+            FilterChip(
+                selected = lang == l,
+                onClick = { AppLanguage.set(ctx, l) },
+                label = { Text(if (l == Lang.HINDI) "हिन्दी" else "English") }
+            )
+        }
+    }
 }
 
 @Composable
