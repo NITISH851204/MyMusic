@@ -33,6 +33,7 @@ import com.you.music.data.Prefs
 import com.you.music.data.toMediaItem
 import com.you.music.playback.PlaybackService
 import com.you.music.ui.MusicApp
+import com.you.music.ui.LanguageGate
 import com.you.music.ui.rememberPlayerState
 import com.you.music.ui.theme.AppTheme
 import com.you.music.ui.theme.Presets
@@ -113,7 +114,9 @@ class MainActivity : ComponentActivity() {
 
             AppTheme(settings, state.artwork) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MusicApp(controller, state, lastCrash, settings, themeManager)
+                                        LanguageGate {
+                        MusicApp(controller, state, lastCrash, settings, themeManager)
+                                        }
                 }
             }
         }
